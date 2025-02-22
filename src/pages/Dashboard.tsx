@@ -56,23 +56,23 @@ export default function Dashboard() {
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <DashboardCard
-          title="Containers in Transit"
+          title="Contentores em trânsito"
           value={stats?.containersInTransit}
           icon={Truck}
         />
         <DashboardCard
-          title="Orders in Transit"
+          title="Compras em trânsito"
           value={stats?.ordersInTransit}
           icon={Package}
         />
         <DashboardCard
-          title="Total Initial Payments"
+          title="Total de Pagamentos já feitos"
           value={stats?.totalInitialPayment}
           format="currency"
           icon={DollarSign}
         />
         <DashboardCard
-          title="Total Pending Payments"
+          title="Total de Pagamentos pendentes"
           value={stats?.totalPendingPayment}
           format="currency"
           icon={DollarSign}
@@ -84,7 +84,7 @@ export default function Dashboard() {
           <div className="flex items-center space-x-3">
             <Calendar className="h-6 w-6 text-gray-400" />
             <h2 className="text-lg font-medium text-gray-900">
-              Next Container Date
+              Data Próximo Contentor
             </h2>
           </div>
           <p className="mt-2 text-3xl font-semibold text-gray-900">
