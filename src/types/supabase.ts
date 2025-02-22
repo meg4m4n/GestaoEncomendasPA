@@ -121,6 +121,7 @@ export interface Database {
           final_payment_date: string | null
           final_payment_amount: number | null
           expected_start_date: string
+          expected_shipping_date: string | null
           container_reference: string | null
           etd: string | null
           eta: string | null
@@ -145,6 +146,7 @@ export interface Database {
           final_payment_date?: string | null
           final_payment_amount?: number | null
           expected_start_date: string
+          expected_shipping_date?: string | null
           container_reference?: string | null
           etd?: string | null
           eta?: string | null
@@ -169,6 +171,7 @@ export interface Database {
           final_payment_date?: string | null
           final_payment_amount?: number | null
           expected_start_date?: string
+          expected_shipping_date?: string | null
           container_reference?: string | null
           etd?: string | null
           eta?: string | null
