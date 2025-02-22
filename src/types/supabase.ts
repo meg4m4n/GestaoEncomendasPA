@@ -128,6 +128,7 @@ export interface Database {
           status: 'pending' | 'in_production' | 'in_transit' | 'delivered'
           created_at: string
           updated_at: string
+          order_date: string
         }
         Insert: {
           id?: string
@@ -151,6 +152,7 @@ export interface Database {
           status?: 'pending' | 'in_production' | 'in_transit' | 'delivered'
           created_at?: string
           updated_at?: string
+          order_date?: string
         }
         Update: {
           id?: string
@@ -174,6 +176,7 @@ export interface Database {
           status?: 'pending' | 'in_production' | 'in_transit' | 'delivered'
           created_at?: string
           updated_at?: string
+          order_date?: string
         }
       }
     }

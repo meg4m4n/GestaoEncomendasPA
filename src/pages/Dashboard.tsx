@@ -108,9 +108,9 @@ function DashboardCard({
   format?: 'number' | 'currency';
 }) {
   const formattedValue = format === 'currency'
-    ? new Intl.NumberFormat('en-US', {
+    ? new Intl.NumberFormat('pt-PT', {
         style: 'currency',
-        currency: 'USD'
+        currency: 'EUR'
       }).format(value || 0)
     : value?.toLocaleString();
 
