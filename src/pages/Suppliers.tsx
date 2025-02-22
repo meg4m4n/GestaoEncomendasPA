@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2, Plus, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 type Supplier = {
   id: string;
@@ -12,14 +14,25 @@ type Supplier = {
   phone: string;
 };
 
+const supplierSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  address: z.string().optional(),
+  country: z.string().optional(),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  phone: z.string().optional(),
+});
+
+type SupplierFormData = z.infer<typeof supplierSchema>;
+
 export default function Suppliers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: suppliers, isLoading } = useQuery({
-    queryKey: ['suppliers'],
+    queryKey: ['suppliers', searchTerm],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('suppliers')
@@ -42,6 +55,9 @@ export default function Suppliers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+    },
+    onError: (error: Error) => {
+      setError(error.message);
     }
   });
 
@@ -58,6 +74,16 @@ export default function Suppliers() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Suppliers</h1>
         <button
@@ -152,19 +178,31 @@ export default function Suppliers() {
           onClose={() => {
             setIsModalOpen(false);
             setSelectedSupplier(null);
+            setError(null);
           }}
           onSave={async (data) => {
-            if (selectedSupplier) {
-              await supabase
-                .from('suppliers')
-                .update(data)
-                .eq('id', selectedSupplier.id);
-            } else {
-              await supabase.from('suppliers').insert(data);
+            try {
+              if (selectedSupplier) {
+                const { error } = await supabase
+                  .from('suppliers')
+                  .update(data)
+                  .eq('id', selectedSupplier.id);
+                if (error) throw error;
+              } else {
+                const { error } = await supabase
+                  .from('suppliers')
+                  .insert(data);
+                if (error) throw error;
+              }
+              queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+              setIsModalOpen(false);
+              setSelectedSupplier(null);
+              setError(null);
+            } catch (error) {
+              if (error instanceof Error) {
+                setError(error.message);
+              }
             }
-            queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-            setIsModalOpen(false);
-            setSelectedSupplier(null);
           }}
         />
       )}
@@ -179,19 +217,30 @@ function SupplierModal({
 }: {
   supplier: Supplier | null;
   onClose: () => void;
-  onSave: (data: Omit<Supplier, 'id'>) => Promise<void>;
+  onSave: (data: SupplierFormData) => Promise<void>;
 }) {
-  const [formData, setFormData] = useState({
-    name: supplier?.name || '',
-    address: supplier?.address || '',
-    country: supplier?.country || '',
-    email: supplier?.email || '',
-    phone: supplier?.phone || '',
+  const { register, handleSubmit, formState: { errors } } = useForm<SupplierFormData>({
+    defaultValues: supplier || {
+      name: '',
+      address: '',
+      country: '',
+      email: '',
+      phone: '',
+    }
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onSave(formData);
+  const onSubmit = async (data: SupplierFormData) => {
+    try {
+      const validatedData = supplierSchema.parse(data);
+      await onSave(validatedData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        error.errors.forEach((err) => {
+          console.error(`Validation error: ${err.message}`);
+        });
+      }
+      throw error;
+    }
   };
 
   return (
@@ -200,23 +249,23 @@ function SupplierModal({
         <h2 className="text-lg font-medium mb-4">
           {supplier ? 'Edit Supplier' : 'Add Supplier'}
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Name</label>
             <input
               type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              {...register('name')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Address</label>
             <input
               type="text"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              {...register('address')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
@@ -224,8 +273,7 @@ function SupplierModal({
             <label className="block text-sm font-medium text-gray-700">Country</label>
             <input
               type="text"
-              value={formData.country}
-              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+              {...register('country')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
@@ -233,17 +281,18 @@ function SupplierModal({
             <label className="block text-sm font-medium text-gray-700">Email</label>
             <input
               type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              {...register('email')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
+            {errors.email && (
+              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Phone</label>
             <input
               type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              {...register('phone')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>

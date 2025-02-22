@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Trash2, Plus, Search, Truck, DollarSign, TrendingUp, Box } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 type Carrier = {
   id: string;
@@ -20,10 +22,21 @@ type CarrierStats = {
   priceVariation: number;
 };
 
+const carrierSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  address: z.string().optional(),
+  country: z.string().optional(),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  phone: z.string().optional(),
+});
+
+type CarrierFormData = z.infer<typeof carrierSchema>;
+
 export default function Carriers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCarrier, setSelectedCarrier] = useState<Carrier | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: carriers, isLoading } = useQuery({
@@ -106,6 +119,9 @@ export default function Carriers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carriers'] });
+    },
+    onError: (error: Error) => {
+      setError(error.message);
     }
   });
 
@@ -122,6 +138,16 @@ export default function Carriers() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Carriers</h1>
         <button
@@ -228,19 +254,31 @@ export default function Carriers() {
           onClose={() => {
             setIsModalOpen(false);
             setSelectedCarrier(null);
+            setError(null);
           }}
           onSave={async (data) => {
-            if (selectedCarrier) {
-              await supabase
-                .from('carriers')
-                .update(data)
-                .eq('id', selectedCarrier.id);
-            } else {
-              await supabase.from('carriers').insert(data);
+            try {
+              if (selectedCarrier) {
+                const { error } = await supabase
+                  .from('carriers')
+                  .update(data)
+                  .eq('id', selectedCarrier.id);
+                if (error) throw error;
+              } else {
+                const { error } = await supabase
+                  .from('carriers')
+                  .insert(data);
+                if (error) throw error;
+              }
+              queryClient.invalidateQueries({ queryKey: ['carriers'] });
+              setIsModalOpen(false);
+              setSelectedCarrier(null);
+              setError(null);
+            } catch (error) {
+              if (error instanceof Error) {
+                setError(error.message);
+              }
             }
-            queryClient.invalidateQueries({ queryKey: ['carriers'] });
-            setIsModalOpen(false);
-            setSelectedCarrier(null);
           }}
         />
       )}
@@ -255,19 +293,30 @@ function CarrierModal({
 }: {
   carrier: Carrier | null;
   onClose: () => void;
-  onSave: (data: Omit<Carrier, 'id'>) => Promise<void>;
+  onSave: (data: CarrierFormData) => Promise<void>;
 }) {
-  const [formData, setFormData] = useState({
-    name: carrier?.name || '',
-    address: carrier?.address || '',
-    country: carrier?.country || '',
-    email: carrier?.email || '',
-    phone: carrier?.phone || '',
+  const { register, handleSubmit, formState: { errors } } = useForm<CarrierFormData>({
+    defaultValues: carrier || {
+      name: '',
+      address: '',
+      country: '',
+      email: '',
+      phone: '',
+    }
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onSave(formData);
+  const onSubmit = async (data: CarrierFormData) => {
+    try {
+      const validatedData = carrierSchema.parse(data);
+      await onSave(validatedData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        error.errors.forEach((err) => {
+          console.error(`Validation error: ${err.message}`);
+        });
+      }
+      throw error;
+    }
   };
 
   return (
@@ -276,23 +325,23 @@ function CarrierModal({
         <h2 className="text-lg font-medium mb-4">
           {carrier ? 'Edit Carrier' : 'Add Carrier'}
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Name</label>
             <input
               type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              {...register('name')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Address</label>
             <input
               type="text"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              {...register('address')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
@@ -300,8 +349,7 @@ function CarrierModal({
             <label className="block text-sm font-medium text-gray-700">Country</label>
             <input
               type="text"
-              value={formData.country}
-              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+              {...register('country')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
@@ -309,17 +357,18 @@ function CarrierModal({
             <label className="block text-sm font-medium text-gray-700">Email</label>
             <input
               type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              {...register('email')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
+            {errors.email && (
+              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Phone</label>
             <input
               type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              {...register('phone')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
