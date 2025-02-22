@@ -15,8 +15,8 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="flex w-64 flex-col bg-white border-r border-gray-200">
-      <div className="flex h-16 items-center px-4 border-b border-gray-200">
+    <div className="flex w-64 flex-col bg-[#0284c7]">
+      <div className="flex h-16 items-center px-4 bg-white">
         <img 
           src="https://www.nhclima.com/images/logo_black.svg" 
           alt="NH Clima" 
@@ -32,8 +32,8 @@ export default function Sidebar() {
               cn(
                 'group flex items-center px-2 py-2 text-sm font-medium rounded-md',
                 isActive
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/80 hover:bg-white/5 hover:text-white'
               )
             }
           >
@@ -45,6 +45,9 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      <div className="p-4 text-[8px] text-white/60 text-center border-t border-white/10">
+        criado por: Pedro Almeida & meGa
+      </div>
     </div>
   );
 }

@@ -18,7 +18,8 @@ const orderSchema = z.object({
   final_payment_amount: z.number().min(0, 'O valor do pagamento final deve ser positivo').optional().nullable(),
   order_date: z.string().min(1, 'Data da encomenda é obrigatória'),
   expected_shipping_date: z.string().min(1, 'Data prevista de envio é obrigatória'),
-  expected_start_date: z.string().min(1, 'Data de início prevista é obrigatória'),
+  initial_payment_date: z.string().optional().nullable(),
+  final_payment_date: z.string().optional().nullable(),
   container_reference: z.string().optional(),
   etd: z.string().optional().nullable(),
   eta: z.string().optional().nullable(),
@@ -134,7 +135,8 @@ export default function OrderForm() {
       ...data,
       order_date: data.order_date ? new Date(data.order_date).toISOString() : null,
       expected_shipping_date: data.expected_shipping_date ? new Date(data.expected_shipping_date).toISOString() : null,
-      expected_start_date: data.expected_start_date ? new Date(data.expected_start_date).toISOString() : null,
+      initial_payment_date: data.initial_payment_date ? new Date(data.initial_payment_date).toISOString() : null,
+      final_payment_date: data.final_payment_date ? new Date(data.final_payment_date).toISOString() : null,
       etd: data.etd ? new Date(data.etd).toISOString() : null,
       eta: data.eta ? new Date(data.eta).toISOString() : null,
       ata: data.ata ? new Date(data.ata).toISOString() : null,
@@ -304,10 +306,10 @@ export default function OrderForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Data de Início Prevista</label>
+            <label className="block text-sm font-medium text-gray-700">Data Pagamento Inicial</label>
             <input
               type="date"
-              {...register('expected_start_date')}
+              {...register('initial_payment_date')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
@@ -318,6 +320,15 @@ export default function OrderForm() {
               type="number"
               step="0.01"
               {...register('initial_payment_amount', { valueAsNumber: true })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Data Pagamento Final</label>
+            <input
+              type="date"
+              {...register('final_payment_date')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
