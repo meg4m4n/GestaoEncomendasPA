@@ -21,7 +21,7 @@ interface SupplierModalProps {
 
 export default function SupplierModal({ supplier, onClose, onSave }: SupplierModalProps) {
   const [error, setError] = useState<string | null>(null);
-  const { register, handleSubmit, formState: { errors } } = useForm<SupplierFormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<SupplierFormData>({
     defaultValues: supplier || {
       name: '',
       address: '',
@@ -115,15 +115,17 @@ export default function SupplierModal({ supplier, onClose, onSave }: SupplierMod
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 disabled:opacity-50"
             >
-              {supplier ? 'Atualizar' : 'Criar'}
+              {isSubmitting ? 'A guardar...' : supplier ? 'Atualizar' : 'Criar'}
             </button>
           </div>
         </form>

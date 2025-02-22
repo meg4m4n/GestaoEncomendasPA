@@ -1,13 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
+import { Database } from '../types/supabase';
 
-const supabaseUrl = 'https://jhvuauhebopaujuktxhv.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpodnVhdWhlYm9wYXVqdWt0eGh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAyNTYyMTAsImV4cCI6MjA1NTgzMjIxMH0.Wr05CaacizL6TrYgQKh6jomKHorkd2UgiWQlikfSK-s';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase configuration');
+  throw new Error('Missing environment variables for Supabase configuration');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true
+  }
+});
 
 export async function handleDatabaseError(error: any): Promise<string> {
   console.error('Database error:', error);
@@ -18,6 +24,10 @@ export async function handleDatabaseError(error: any): Promise<string> {
   
   if (error?.code === '23503') {
     return 'Não é possível realizar esta operação devido a registros relacionados.';
+  }
+
+  if (error?.message) {
+    return error.message;
   }
   
   return 'Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente.';

@@ -41,7 +41,14 @@ export default function Suppliers() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
+      if (!newSupplier) {
+        throw new Error('Erro ao criar fornecedor');
+      }
+
       return newSupplier;
     },
     onSuccess: () => {
@@ -50,7 +57,7 @@ export default function Suppliers() {
       setSelectedSupplier(null);
       setError(null);
     },
-    onError: async (error) => {
+    onError: async (error: any) => {
       const errorMessage = await handleDatabaseError(error);
       setError(errorMessage);
     }
@@ -61,9 +68,13 @@ export default function Suppliers() {
       const { error } = await supabase
         .from('suppliers')
         .update(data)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
@@ -71,7 +82,7 @@ export default function Suppliers() {
       setSelectedSupplier(null);
       setError(null);
     },
-    onError: async (error) => {
+    onError: async (error: any) => {
       const errorMessage = await handleDatabaseError(error);
       setError(errorMessage);
     }
@@ -84,28 +95,41 @@ export default function Suppliers() {
         .delete()
         .eq('id', id);
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     },
-    onError: async (error) => {
+    onError: async (error: any) => {
       const errorMessage = await handleDatabaseError(error);
       setError(errorMessage);
     }
   });
 
   const handleSave = async (data: Omit<Supplier, 'id'>) => {
-    if (selectedSupplier) {
-      await updateMutation.mutateAsync({ ...data, id: selectedSupplier.id });
-    } else {
-      await createMutation.mutateAsync(data);
+    try {
+      setError(null);
+      if (selectedSupplier) {
+        await updateMutation.mutateAsync({ ...data, id: selectedSupplier.id });
+      } else {
+        await createMutation.mutateAsync(data);
+      }
+    } catch (error: any) {
+      const errorMessage = await handleDatabaseError(error);
+      setError(errorMessage);
     }
   };
 
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja eliminar este fornecedor? Esta ação não pode ser desfeita.')) {
-      await deleteMutation.mutateAsync(id);
+      try {
+        await deleteMutation.mutateAsync(id);
+      } catch (error: any) {
+        const errorMessage = await handleDatabaseError(error);
+        setError(errorMessage);
+      }
     }
   };
 
@@ -127,6 +151,7 @@ export default function Suppliers() {
           onClick={() => {
             setSelectedSupplier(null);
             setIsModalOpen(true);
+            setError(null);
           }}
           className="bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700 flex items-center gap-2"
         >
@@ -193,6 +218,7 @@ export default function Suppliers() {
                       onClick={() => {
                         setSelectedSupplier(supplier);
                         setIsModalOpen(true);
+                        setError(null);
                       }}
                       className="text-primary-600 hover:text-primary-900 inline-flex items-center mr-4"
                     >
