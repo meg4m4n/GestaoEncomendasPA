@@ -8,3 +8,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export async function handleDatabaseError(error: any): Promise<string> {
+  console.error('Database error:', error);
+  
+  if (error?.code === '23505') {
+    return 'Um registro com estes dados já existe.';
+  }
+  
+  if (error?.code === '23503') {
+    return 'Não é possível realizar esta operação devido a registros relacionados.';
+  }
+  
+  return 'Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente.';
+}

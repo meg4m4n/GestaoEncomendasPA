@@ -1,20 +1,27 @@
 import { NavLink } from 'react-router-dom';
 import { Package, Truck, Building2, MapPin, LayoutDashboard } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/utils';
 
-const navigation = [
-  { name: 'Dashboard', to: '/', icon: LayoutDashboard },
-  { name: 'Orders', to: '/orders', icon: Package },
-  { name: 'Suppliers', to: '/suppliers', icon: Building2 },
-  { name: 'Carriers', to: '/carriers', icon: Truck },
-  { name: 'Destinations', to: '/destinations', icon: MapPin },
-];
-
 export default function Sidebar() {
+  const { t } = useTranslation();
+
+  const navigation = [
+    { name: t('dashboard'), to: '/', icon: LayoutDashboard },
+    { name: t('orders'), to: '/orders', icon: Package },
+    { name: t('suppliers'), to: '/suppliers', icon: Building2 },
+    { name: t('carriers'), to: '/carriers', icon: Truck },
+    { name: t('destinations'), to: '/destinations', icon: MapPin },
+  ];
+
   return (
-    <div className="flex w-64 flex-col bg-gray-800">
-      <div className="flex h-16 items-center justify-center">
-        <h1 className="text-xl font-bold text-white">Order Management</h1>
+    <div className="flex w-64 flex-col bg-white border-r border-gray-200">
+      <div className="flex h-16 items-center px-4 border-b border-gray-200">
+        <img 
+          src="https://www.nhclima.com/images/logo_black.svg" 
+          alt="NH Clima" 
+          className="h-8"
+        />
       </div>
       <nav className="mt-5 flex-1 space-y-1 px-2">
         {navigation.map((item) => (
@@ -25,8 +32,8 @@ export default function Sidebar() {
               cn(
                 'group flex items-center px-2 py-2 text-sm font-medium rounded-md',
                 isActive
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  ? 'bg-primary-50 text-primary-700'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               )
             }
           >
