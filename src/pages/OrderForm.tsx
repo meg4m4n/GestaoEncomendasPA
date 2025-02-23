@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -52,6 +52,23 @@ export default function OrderForm() {
     },
     enabled: !!id
   });
+
+  // Reset form when order data is loaded
+  useEffect(() => {
+    if (order) {
+      const formData = {
+        ...order,
+        order_date: order.order_date ? new Date(order.order_date).toISOString().split('T')[0] : '',
+        expected_shipping_date: order.expected_shipping_date ? new Date(order.expected_shipping_date).toISOString().split('T')[0] : '',
+        initial_payment_date: order.initial_payment_date ? new Date(order.initial_payment_date).toISOString().split('T')[0] : '',
+        final_payment_date: order.final_payment_date ? new Date(order.final_payment_date).toISOString().split('T')[0] : '',
+        etd: order.etd ? new Date(order.etd).toISOString().split('T')[0] : '',
+        eta: order.eta ? new Date(order.eta).toISOString().split('T')[0] : '',
+        ata: order.ata ? new Date(order.ata).toISOString().split('T')[0] : ''
+      };
+      reset(formData);
+    }
+  }, [order, reset]);
 
   const { data: suppliers } = useQuery({
     queryKey: ['suppliers'],

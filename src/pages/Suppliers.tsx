@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2, Plus, Search } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Building2, Package, Clock, DollarSign } from 'lucide-react';
 import { supabase, handleDatabaseError } from '../lib/supabase';
+import { differenceInDays } from 'date-fns';
 import SupplierModal from '../components/SupplierModal';
 
 type Supplier = {
@@ -11,6 +12,12 @@ type Supplier = {
   country: string;
   email: string;
   phone: string;
+};
+
+type SupplierStats = {
+  totalOrders: number;
+  totalValue: number;
+  averageDeliveryTime: number;
 };
 
 export default function Suppliers() {
@@ -30,6 +37,43 @@ export default function Suppliers() {
 
       if (error) throw error;
       return data as Supplier[];
+    }
+  });
+
+  const { data: supplierStats } = useQuery({
+    queryKey: ['supplier-stats'],
+    queryFn: async () => {
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('supplier_id, order_value, order_date, expected_shipping_date');
+
+      if (error) throw error;
+
+      const stats: Record<string, SupplierStats> = {};
+      
+      orders?.forEach(order => {
+        if (!stats[order.supplier_id]) {
+          stats[order.supplier_id] = {
+            totalOrders: 0,
+            totalValue: 0,
+            averageDeliveryTime: 0
+          };
+        }
+
+        stats[order.supplier_id].totalOrders++;
+        stats[order.supplier_id].totalValue += order.order_value || 0;
+
+        if (order.order_date && order.expected_shipping_date) {
+          const deliveryTime = differenceInDays(
+            new Date(order.expected_shipping_date),
+            new Date(order.order_date)
+          );
+          const currentTotal = stats[order.supplier_id].averageDeliveryTime * (stats[order.supplier_id].totalOrders - 1);
+          stats[order.supplier_id].averageDeliveryTime = (currentTotal + deliveryTime) / stats[order.supplier_id].totalOrders;
+        }
+      });
+
+      return stats;
     }
   });
 
@@ -173,69 +217,101 @@ export default function Suppliers() {
         />
       </div>
 
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">País</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contacto</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Morada</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {isLoading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                  A carregar...
-                </td>
-              </tr>
-            ) : suppliers?.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                  Nenhum fornecedor encontrado
-                </td>
-              </tr>
-            ) : (
-              suppliers?.map((supplier) => (
-                <tr key={supplier.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {supplier.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {supplier.country}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div>{supplier.email}</div>
-                    <div>{supplier.phone}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {supplier.address}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => {
-                        setSelectedSupplier(supplier);
-                        setIsModalOpen(true);
-                        setError(null);
-                      }}
-                      className="text-primary-600 hover:text-primary-900 inline-flex items-center mr-4"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(supplier.id)}
-                      className="text-red-600 hover:text-red-900 inline-flex items-center"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {isLoading ? (
+          <div className="col-span-full text-center py-4 text-gray-500">
+            A carregar...
+          </div>
+        ) : suppliers?.length === 0 ? (
+          <div className="col-span-full text-center py-4 text-gray-500">
+            Nenhum fornecedor encontrado
+          </div>
+        ) : (
+          suppliers?.map((supplier) => {
+            const stats = supplierStats?.[supplier.id] || {
+              totalOrders: 0,
+              totalValue: 0,
+              averageDeliveryTime: 0
+            };
+            
+            return (
+              <div key={supplier.id} className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-start space-x-3">
+                      <Building2 className="h-6 w-6 text-indigo-600 flex-shrink-0" />
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900">{supplier.name}</h3>
+                        <p className="text-sm text-gray-500">{supplier.country}</p>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          setSelectedSupplier(supplier);
+                          setIsModalOpen(true);
+                          setError(null);
+                        }}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(supplier.id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Package className="h-5 w-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm text-gray-500">Total Encomendas</p>
+                        <p className="text-lg font-medium">{stats.totalOrders}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="h-5 w-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm text-gray-500">Total Comprado</p>
+                        <p className="text-lg font-medium">
+                          €{stats.totalValue.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 col-span-2">
+                      <Clock className="h-5 w-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm text-gray-500">Prazo Médio Entrega</p>
+                        <p className="text-lg font-medium">
+                          {Math.round(stats.averageDeliveryTime)} dias
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2 text-sm text-gray-600">
+                    <p className="flex items-center">
+                      <span className="font-medium mr-2">Email:</span>
+                      {supplier.email}
+                    </p>
+                    <p className="flex items-center">
+                      <span className="font-medium mr-2">Telefone:</span>
+                      {supplier.phone}
+                    </p>
+                    <p className="flex items-center">
+                      <span className="font-medium mr-2">Morada:</span>
+                      {supplier.address}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {isModalOpen && (
