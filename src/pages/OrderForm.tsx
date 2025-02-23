@@ -29,31 +29,64 @@ const orderSchema = z.object({
 
 type OrderFormData = z.infer<typeof orderSchema>;
 
+type OrderDocument = {
+  id: string;
+  order_id: string;
+  name: string;
+  file_url: string;
+  created_at: string;
+};
+
+type Order = {
+  id: string;
+  reference: string;
+  supplier_id: string;
+  destination_id: string;
+  carrier_id: string;
+  product_description: string;
+  container_type: string;
+  transport_price: number;
+  order_value: number;
+  status: 'in_production' | 'in_transit' | 'delivered' | 'pending';
+  order_date: string;
+  expected_shipping_date: string;
+  initial_payment_date: string | null;
+  final_payment_date: string | null;
+  container_reference: string;
+  etd: string | null;
+  eta: string | null;
+  ata: string | null;
+  // Use o nome do relacionamento detectado no cache do esquema:
+  order_documents_order_id_fkey?: OrderDocument[];
+};
+
 export default function OrderForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  // Estado para armazenar o arquivo a ser enviado
+  const [file, setFile] = useState<File | null>(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<OrderFormData>();
 
-  const { data: order } = useQuery({
+  // Busca os dados da encomenda com os documentos embutidos usando o relacionamento detectado
+  const { data: order } = useQuery<Order | null>({
     queryKey: ['order', id],
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, order_documents_order_id_fkey(*)')
         .eq('id', id)
         .single();
-
       if (error) throw error;
       return data;
     },
     enabled: !!id
   });
 
-  // Reset form when order data is loaded
+  // Quando estiver editando, preenche o formulário com os dados carregados
   useEffect(() => {
     if (order) {
       const formData = {
@@ -73,11 +106,7 @@ export default function OrderForm() {
   const { data: suppliers } = useQuery({
     queryKey: ['suppliers'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('id, name')
-        .order('name');
-
+      const { data, error } = await supabase.from('suppliers').select('id, name').order('name');
       if (error) throw error;
       return data;
     }
@@ -86,11 +115,7 @@ export default function OrderForm() {
   const { data: destinations } = useQuery({
     queryKey: ['destinations'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('destinations')
-        .select('id, name')
-        .order('name');
-
+      const { data, error } = await supabase.from('destinations').select('id, name').order('name');
       if (error) throw error;
       return data;
     }
@@ -99,11 +124,7 @@ export default function OrderForm() {
   const { data: carriers } = useQuery({
     queryKey: ['carriers'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('carriers')
-        .select('id, name')
-        .order('name');
-
+      const { data, error } = await supabase.from('carriers').select('id, name').order('name');
       if (error) throw error;
       return data;
     }
@@ -112,42 +133,57 @@ export default function OrderForm() {
   const { data: containerTypes } = useQuery({
     queryKey: ['container-types'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('container_types')
-        .select('name')
-        .order('name');
-
+      const { data, error } = await supabase.from('container_types').select('name').order('name');
       if (error) throw error;
       return data;
     }
   });
 
+  // Mutação para criar ou atualizar a encomenda
   const mutation = useMutation({
     mutationFn: async (data: OrderFormData) => {
       if (id) {
-        const { error } = await supabase
-          .from('orders')
-          .update(data)
-          .eq('id', id);
+        const { error } = await supabase.from('orders').update(data).eq('id', id);
         if (error) throw error;
+        return id;
       } else {
-        const { error } = await supabase
-          .from('orders')
-          .insert(data);
+        const { data: insertedData, error } = await supabase.from('orders').insert(data).select().single();
         if (error) throw error;
+        return insertedData.id;
       }
     },
-    onSuccess: () => {
+    onSuccess: async (orderId: string) => {
+      // Se um arquivo foi selecionado, faz o upload e insere o registro do documento
+      if (file) {
+        const { data: storageData, error: uploadError } = await supabase
+          .storage.from('order-documents')
+          .upload(`${orderId}/${file.name}`, file);
+        if (uploadError) {
+          console.error('Error uploading file:', uploadError);
+          setError(uploadError.message);
+          return;
+        }
+        const { error: docError } = await supabase.from('order_documents').insert({
+          order_id: orderId,
+          name: file.name,
+          file_url: storageData.path
+        });
+        if (docError) {
+          console.error('Error inserting document record:', docError);
+          setError(docError.message);
+          return;
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['order', id] });
       navigate('/orders');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       setError(error.message);
     }
   });
 
   const onSubmit = (data: OrderFormData) => {
-    // Ensure dates are in ISO format
     const formattedData = {
       ...data,
       order_date: data.order_date ? new Date(data.order_date).toISOString() : null,
@@ -159,6 +195,51 @@ export default function OrderForm() {
       ata: data.ata ? new Date(data.ata).toISOString() : null,
     };
     mutation.mutate(formattedData);
+  };
+
+  // Função para tratar a seleção do arquivo
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFile(e.target.files[0]);
+    }
+  };
+
+  // Mutação para atualizar registros de documentos
+  const updateDocumentMutation = useMutation({
+    mutationFn: async ({ documentId, newName }: { documentId: string, newName: string }) => {
+      const { error } = await supabase.from('order_documents').update({ name: newName }).eq('id', documentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order', id] });
+    },
+    onError: (error: any) => {
+      setError(error.message);
+    }
+  });
+
+  // Mutação para excluir registros de documentos
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      const { error } = await supabase.from('order_documents').delete().eq('id', documentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order', id] });
+    },
+    onError: (error: any) => {
+      setError(error.message);
+    }
+  });
+
+  const handleDocumentUpdate = (documentId: string, newName: string) => {
+    updateDocumentMutation.mutate({ documentId, newName });
+  };
+
+  const handleDocumentDelete = (documentId: string) => {
+    if (confirm("Tem certeza que deseja excluir este documento?")) {
+      deleteDocumentMutation.mutate(documentId);
+    }
   };
 
   return (
@@ -181,6 +262,7 @@ export default function OrderForm() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 bg-white shadow-sm rounded-lg p-6">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {/* Campos de input existentes */}
           <div>
             <label className="block text-sm font-medium text-gray-700">Referência</label>
             <input
@@ -192,7 +274,6 @@ export default function OrderForm() {
               <p className="mt-1 text-sm text-red-600">{errors.reference.message}</p>
             )}
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Estado</label>
             <select
@@ -205,7 +286,6 @@ export default function OrderForm() {
               <option value="delivered">Entregue</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Fornecedor</label>
             <select
@@ -220,7 +300,6 @@ export default function OrderForm() {
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Destino</label>
             <select
@@ -235,7 +314,6 @@ export default function OrderForm() {
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Transportadora</label>
             <select
@@ -250,7 +328,6 @@ export default function OrderForm() {
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Tipo de Contentor</label>
             <select
@@ -265,7 +342,6 @@ export default function OrderForm() {
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Referência do Contentor</label>
             <input
@@ -274,7 +350,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Descrição do Produto</label>
             <textarea
@@ -283,7 +358,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Preço do Transporte (€)</label>
             <input
@@ -293,7 +367,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Valor da Encomenda (€)</label>
             <input
@@ -303,7 +376,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Data da Encomenda</label>
             <input
@@ -312,7 +384,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Data Prevista de Envio</label>
             <input
@@ -321,7 +392,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Data Pagamento Inicial</label>
             <input
@@ -330,7 +400,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Valor do Pagamento Inicial (€)</label>
             <input
@@ -340,7 +409,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Data Pagamento Final</label>
             <input
@@ -349,7 +417,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">Valor do Pagamento Final (€)</label>
             <input
@@ -359,7 +426,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">ETD</label>
             <input
@@ -368,7 +434,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">ETA</label>
             <input
@@ -377,7 +442,6 @@ export default function OrderForm() {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700">ATA</label>
             <input
@@ -387,6 +451,51 @@ export default function OrderForm() {
             />
           </div>
         </div>
+
+        {/* Campo de upload de arquivo */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Documento</label>
+          <input
+            type="file"
+            onChange={handleFileChange}
+            className="mt-1 block w-full text-sm text-gray-500"
+          />
+        </div>
+
+        {/* Listagem dos documentos enviados (usando a propriedade order_documents_order_id_fkey) */}
+        {order && order.order_documents_order_id_fkey && order.order_documents_order_id_fkey.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-gray-700">Documentos Carregados</h3>
+            {order.order_documents_order_id_fkey.map((doc) => (
+              <div key={doc.id} className="flex items-center gap-2 border p-2 rounded-md">
+                <a
+                  href={supabase.storage.from('order-documents').getPublicUrl(doc.file_url).data.publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 hover:text-indigo-900"
+                >
+                  {doc.name}
+                </a>
+                <input
+                  type="text"
+                  defaultValue={doc.name}
+                  onBlur={(e) => {
+                    if (e.target.value && e.target.value !== doc.name) {
+                      handleDocumentUpdate(doc.id, e.target.value);
+                    }
+                  }}
+                  className="border border-gray-300 rounded-md p-1 text-sm"
+                />
+                <button
+                  onClick={() => handleDocumentDelete(doc.id)}
+                  className="text-red-600 hover:text-red-900 text-sm"
+                >
+                  Excluir
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3">
           <button
