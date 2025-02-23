@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Package, Calendar, DollarSign, Truck } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Plus, Search, Package, Calendar, DollarSign, Truck, Pencil, Trash2, Filter } from 'lucide-react';
+import { supabase, handleDatabaseError } from '../lib/supabase';
 import { format } from 'date-fns';
 
 type Order = {
@@ -22,13 +22,24 @@ type Order = {
   ata: string | null;
 };
 
+const orderStatuses = [
+  { value: '', label: 'Todos' },
+  { value: 'pending', label: 'Pendente' },
+  { value: 'in_production', label: 'Em Produção' },
+  { value: 'in_transit', label: 'Em Trânsito' },
+  { value: 'delivered', label: 'Entregue' }
+];
+
 export default function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: orders, isLoading } = useQuery({
-    queryKey: ['orders', searchTerm],
+    queryKey: ['orders', searchTerm, statusFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select(`
           *,
@@ -38,10 +49,42 @@ export default function Orders() {
         `)
         .ilike('reference', `%${searchTerm}%`);
 
+      if (statusFilter) {
+        query = query.eq('status', statusFilter);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
       return data as Order[];
     }
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    onError: async (error) => {
+      const errorMessage = await handleDatabaseError(error);
+      setError(errorMessage);
+    }
+  });
+
+  const handleDelete = async (order: Order) => {
+    const message = `Tem certeza que deseja excluir a encomenda "${order.reference}"?\n\nDetalhes da encomenda:\n- Fornecedor: ${order.supplier.name}\n- Destino: ${order.destination.name}\n- Estado: ${getStatusText(order.status)}\n\nEsta ação não pode ser desfeita.`;
+    
+    if (confirm(message)) {
+      await deleteMutation.mutate(order.id);
+    }
+  };
 
   const getStatusColor = (status: Order['status']) => {
     switch (status) {
@@ -75,6 +118,16 @@ export default function Orders() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Encomendas</h1>
         <Link
@@ -86,17 +139,36 @@ export default function Orders() {
         </Link>
       </div>
 
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
+      <div className="flex gap-4">
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Pesquisar encomendas por referência..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          />
         </div>
-        <input
-          type="text"
-          placeholder="Pesquisar encomendas por referência..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-        />
+        
+        <div className="relative w-64">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Filter className="h-5 w-5 text-gray-400" />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          >
+            {orderStatuses.map(status => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
@@ -104,6 +176,7 @@ export default function Orders() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referência</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fornecedor</th>
@@ -117,19 +190,37 @@ export default function Orders() {
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={9} className="px-6 py-4 text-center text-sm text-gray-500">
                     A carregar...
                   </td>
                 </tr>
               ) : orders?.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={9} className="px-6 py-4 text-center text-sm text-gray-500">
                     Nenhuma encomenda encontrada
                   </td>
                 </tr>
               ) : (
                 orders?.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          to={`/orders/${order.id}`}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(order)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Link
                         to={`/orders/${order.id}`}

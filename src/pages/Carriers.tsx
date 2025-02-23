@@ -288,7 +288,7 @@ export default function Carriers() {
                       <div>
                         <p className="text-sm text-gray-500">Preço Médio</p>
                         <p className="text-lg font-medium">
-                          ${stats?.averagePrice.toFixed(2) || '0.00'}
+                          €{stats?.averagePrice.toFixed(2) || '0.00'}
                         </p>
                       </div>
                     </div>

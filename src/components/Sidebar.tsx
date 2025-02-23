@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom';
-import { Package, Truck, Building2, MapPin, LayoutDashboard } from 'lucide-react';
+import { Package, Truck, Building2, MapPin, LayoutDashboard, Users, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/utils';
+import { signOut } from '../lib/supabase';
 
 export default function Sidebar() {
   const { t } = useTranslation();
@@ -12,7 +13,16 @@ export default function Sidebar() {
     { name: t('suppliers'), to: '/suppliers', icon: Building2 },
     { name: t('carriers'), to: '/carriers', icon: Truck },
     { name: t('destinations'), to: '/destinations', icon: MapPin },
+    { name: t('users'), to: '/users', icon: Users },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
     <div className="flex w-64 flex-col bg-[#0284c7]">
@@ -44,6 +54,17 @@ export default function Sidebar() {
             {item.name}
           </NavLink>
         ))}
+        
+        <button
+          onClick={handleLogout}
+          className="w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md text-white/80 hover:bg-white/5 hover:text-white"
+        >
+          <LogOut
+            className="mr-3 h-6 w-6 flex-shrink-0"
+            aria-hidden="true"
+          />
+          {t('logout')}
+        </button>
       </nav>
       <div className="p-4 text-[8px] text-white/60 text-center border-t border-white/10">
         criado por: Pedro Almeida & meGa

@@ -12,6 +12,7 @@ export default {
     save: 'Guardar',
     search: 'Pesquisar',
     update: 'Atualizar',
+    logout: 'Sair',
 
     // Navigation
     dashboard: 'Painel',
@@ -19,6 +20,7 @@ export default {
     suppliers: 'Fornecedores',
     carriers: 'Transportadoras',
     destinations: 'Destinos',
+    users: 'Utilizadores',
 
     // Dashboard
     containersInTransit: 'Contentores em Trânsito',

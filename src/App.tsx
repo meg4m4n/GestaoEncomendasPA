@@ -9,6 +9,7 @@ import Carriers from './pages/Carriers';
 import Destinations from './pages/Destinations';
 import Orders from './pages/Orders';
 import OrderForm from './pages/OrderForm';
+import Users from './pages/Users';
 import Login from './pages/Login';
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ function App() {
             <Route path="orders" element={<Orders />} />
             <Route path="orders/new" element={<OrderForm />} />
             <Route path="orders/:id" element={<OrderForm />} />
+            <Route path="users" element={<Users />} />
           </Route>
         </Routes>
       </Router>
